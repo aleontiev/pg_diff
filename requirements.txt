@@ -1,0 +1,4 @@
+docopt==0.6.2
+schema==0.6.5
+deepdiff==2.5.1
+psycopg2==2.6.2
