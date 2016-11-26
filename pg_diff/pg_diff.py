@@ -15,7 +15,8 @@ Arguments:
   TARGET_DSN     dsn for target database, like "host=xxx dbname=test user=postgres password=secret port=5432"
 
 Options:
-  --type=T_NAME  Type name to compare in category, valid input likes: table_name, table_count, table_schema, row_count, table size. index size, table_total_size
+  --type=T_NAME  Type name to compare in category, valid input likes: table_name, table_count, table_schema, row_count,
+                 table size. index size, table_total_size
   -h --help      Show help info.
   --verbose      Show verbose information.
   --version      Show version.
@@ -178,7 +179,7 @@ order by 2, 3 desc
 class DBTableSchemaDiff(DBDiffBase):
     """Diff class to represent table row count comparison data
     """
-    TABLE_SCHEMA_PSQL_COMMAND = r'export PGPASSWORD={password}; psql -h {host} -U {user} -p {port} {dbname} -c "\d {table}"'
+    TABLE_SCHEMA_PSQL_COMMAND = r'PGPASSWORD={password} psql -h {host} -U {user} -p {port} {dbname} -c "\d {table}"'
 
     def _load_table_basic_info(self, connection):
         try:
