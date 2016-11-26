@@ -274,7 +274,7 @@ class DBTableSchemaDiff(DBDiffBase):
                     break
                 item = item_list[index]
 
-            # sort after processing one section
+            # sort result after processing one section
             result[section].sort()
 
         return result
