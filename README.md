@@ -8,13 +8,17 @@ Now supported diff options are:
 * table_count
 * table_schema
 * row_count
-* table size 
-* index size
-* table_total_size
+* table_size 
+* index_size
+* `table_total_size`
 
 # Why
 
 Recently I worked on database migration things, and very need a tool to analyze the consistency between source and target database. So I make this tool to some simple comparison, and it looks good to me:)
+
+# Prerequisite
+
+You need to install `postgresql` firstly, because `pg_diff` will use `psycopg2` to execute some commands.
 
 # Installation
 
