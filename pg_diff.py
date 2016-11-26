@@ -6,7 +6,7 @@
 Compare between two postgres databases, like all table row count, schema, and etc
 
 Usage:
-  pg_diff --type=T_NAME SOURCE_DSN TARGET_DSN
+  pg_diff --type=T_NAME SOURCE_DSN TARGET_DSN [--verbose]
   pg_diff -h | --help
   pg_diff --version
 
@@ -15,8 +15,9 @@ Arguments:
   TARGET_DSN     dsn for target database, like "host=xxx dbname=test user=postgres password=secret port=5432"
 
 Options:
-  --type=T_NAME  Type name to compare in category, valid input likes: table_name, table_count, table_schema, row_count.
+  --type=T_NAME  Type name to compare in category, valid input likes: table_name, table_count, table_schema, row_count, table size. index size, table_total_size
   -h --help      Show help info.
+  --verbose      Show verbose information.
   --version      Show version.
 """
 
@@ -34,10 +35,22 @@ DIFF_TYPE_TABLE_COUNT = 'table_count'
 DIFF_TYPE_TABLE_NAME = 'table_name'
 DIFF_TYPE_ROW_COUNT = 'row_count'
 DIFF_TYPE_TABLE_SCHEMA = 'table_schema'
+DIFF_TYPE_TABLE_SIZE = 'table_size'
+DIFF_TYPE_INDEX_SIZE = 'index_size'
+DIFF_TYPE_TABLE_TOTAL_SIZE = 'table_total_size'
 
 
 class DBDiffBase(object):
     """Class to represent comparison data for database
+    """
+    TABLE_BASIC_INFO_SQL = """
+    select
+      table_schema,
+      table_name
+    from information_schema.tables
+    where
+      table_schema not in ('pg_catalog', 'information_schema', 'bucardo')
+      and table_type='BASE TABLE'
     """
 
     def __init__(self, dsn):
@@ -68,11 +81,12 @@ class DBDiffBase(object):
         """
         raise NotImplementedError
 
-    def diff(self, target):
+    def diff(self, target, verbose=False):
         """Do diff between two databases
 
         Args:
             target: DBDiffBase object
+            verbose: boolean, show verbose diff result or not
 
         Returns:
             diff result
@@ -92,6 +106,11 @@ class DBDiffBase(object):
 
         src_table_data = self.table_data
         target_table_data = target.table_data
+
+        if verbose:
+            print("Source: ", src_table_data)
+            print('')
+            print("Target: ", target_table_data)
 
         diff_result = DeepDiff(src_table_data, target_table_data)
 
@@ -144,10 +163,10 @@ order by 2, 3 desc
             rows = cur.fetchall()
             for row in rows:
                 self.table_data[row[1]] = row[2]
-
-            cur.execute(self.REMOVE_ROW_COUNT_RUNC_SQL)
         except Exception as e:
             exit('Load row count error, please check:\n{}'.format(e))
+        finally:
+            cur.execute(self.REMOVE_ROW_COUNT_RUNC_SQL)
 
     def load(self):
         """Load database table data based on diff type
@@ -160,16 +179,6 @@ class DBTableSchemaDiff(DBDiffBase):
     """Diff class to represent table row count comparison data
     """
     TABLE_SCHEMA_PSQL_COMMAND = r'export PGPASSWORD={password}; psql -h {host} -U {user} -p {port} {dbname} -c "\d {table}"'
-
-    TABLE_BASIC_INFO_SQL = """
-select
-  table_schema,
-  table_name
-from information_schema.tables
-where
-  table_schema not in ('pg_catalog', 'information_schema', 'bucardo')
-  and table_type='BASE TABLE'
-    """
 
     def _load_table_basic_info(self, connection):
         try:
@@ -194,9 +203,80 @@ where
                 command = self.TABLE_SCHEMA_PSQL_COMMAND.format(**kwargs)
 
                 schema = subprocess.check_output(command, shell=True)
-                self.table_data[table] = schema
+                self.table_data[table] = self._format_raw_schema(schema, ['bucardo'])
         except Exception as e:
             exit('Load table schema error, please check:\n{}'.format(e))
+
+    def _format_raw_schema(self, raw_schema, exclued_keywords=None):
+        if exclued_keywords is None:
+            exclued_keywords = []
+
+        item_list = raw_schema.split('\n')
+        item_list = [item.strip() for item in item_list if item]
+
+        result = {
+            'Columns:': [],
+        }
+
+        section_title_list = [
+            'Indexes:',
+            'Foreign-key constraints:',
+            'Referenced by:',
+            'Triggers:',
+        ]
+
+        index = 0
+        length = len(item_list)
+
+        # skip unnecessary lines
+        if item_list[index].startswith('Table'):
+            index += 1
+
+        if item_list[index].startswith('Column'):
+            index += 1
+
+        if item_list[index].startswith('---'):
+            index += 1
+
+        # parse table columns
+        item = item_list[index]
+        while item not in section_title_list:
+            result['Columns:'].append([element.strip() for element in item.split('|')])
+            index += 1
+            if index >= length:
+                break
+            item = item_list[index]
+        # sort Columns section
+        result['Columns:'].sort()
+
+        # parse other sections
+        while index < length:
+            section = item_list[index]
+            result[section] = []
+            index += 1
+
+            item = item_list[index]
+            while item not in section_title_list:
+                is_excluded = False
+
+                # check excluded keywords
+                for keyword in exclued_keywords:
+                    if keyword in item:
+                        is_excluded = True
+                        break
+
+                if not is_excluded:
+                    result[section].append(item.strip())
+
+                index += 1
+                if index >= length:
+                    break
+                item = item_list[index]
+
+            # sort after processing one section
+            result[section].sort()
+
+        return result
 
     def load(self):
         """Load database table data based on diff type
@@ -208,16 +288,6 @@ where
 
 class DBTableBasicInfoDiff(DBDiffBase):
     """Diff class to represent table basic info comparison data, like table name, table count
-    """
-
-    TABLE_BASIC_INFO_SQL = """
-select
-  table_schema,
-  table_name
-from information_schema.tables
-where
-  table_schema not in ('pg_catalog', 'information_schema', 'bucardo')
-  and table_type='BASE TABLE'
     """
 
     def _load_table_basic_info(self, connection):
@@ -238,21 +308,127 @@ where
         self._load_table_basic_info(self.conn)
 
 
+class DBTableSizeDiff(DBDiffBase):
+    """Diff class to represent table size comparison data
+    """
+
+    TABLE_SIZE_COUNT_SQL = """
+    select
+      table_schema,
+      table_name,
+      pg_size_pretty(pg_table_size(table_name))
+    from information_schema.tables
+    where
+      table_schema not in ('pg_catalog', 'information_schema', 'bucardo')
+      and table_type='BASE TABLE'
+    order by 2, 3 desc
+    """
+
+    def _load_tabale_size_info(self, connection):
+        try:
+            cur = connection.cursor()
+            cur.execute(self.TABLE_SIZE_COUNT_SQL)
+
+            rows = cur.fetchall()
+            for row in rows:
+                self.table_data[row[1]] = row[2]
+        except Exception as e:
+            exit('Load table size error, please check:\n{}'.format(e))
+
+    def load(self):
+        """Load database table data based on diff type
+        """
+        self.conn = self.create_conn()
+        self._load_tabale_size_info(self.conn)
+
+
+class DBIndexSizeDiff(DBDiffBase):
+    """Diff class to represent index size comparison data
+    """
+
+    INDEX_SIZE_COUNT_SQL = """
+    select
+      table_schema,
+      table_name,
+      pg_size_pretty(pg_indexes_size(table_name))
+    from information_schema.tables
+    where
+      table_schema not in ('pg_catalog', 'information_schema', 'bucardo')
+      and table_type='BASE TABLE'
+    order by 2, 3 desc
+    """
+
+    def _load_index_size_info(self, connection):
+        try:
+            cur = connection.cursor()
+            cur.execute(self.INDEX_SIZE_COUNT_SQL)
+
+            rows = cur.fetchall()
+            for row in rows:
+                self.table_data[row[1]] = row[2]
+        except Exception as e:
+            exit('Load index size error, please check:\n{}'.format(e))
+
+    def load(self):
+        """Load database table data based on diff type
+        """
+        self.conn = self.create_conn()
+        self._load_index_size_info(self.conn)
+
+
+class DBTableTotalSizeDiff(DBDiffBase):
+    """Diff class to represent table total size comparison data
+    """
+
+    TABLE_TOTAL_SIZE_COUNT_SQL = """
+    select
+      table_schema,
+      table_name,
+      pg_size_pretty(pg_total_relation_size(table_name))
+    from information_schema.tables
+    where
+      table_schema not in ('pg_catalog', 'information_schema', 'bucardo')
+      and table_type='BASE TABLE'
+    order by 2, 3 desc
+    """
+
+    def _load_table_total_size_info(self, connection):
+        try:
+            cur = connection.cursor()
+            cur.execute(self.INDEX_SIZE_COUNT_SQL)
+
+            rows = cur.fetchall()
+            for row in rows:
+                self.table_data[row[1]] = row[2]
+        except Exception as e:
+            exit('Load index size error, please check:\n{}'.format(e))
+
+    def load(self):
+        """Load database table data based on diff type
+        """
+        self.conn = self.create_conn()
+        self._load_table_total_size_info(self.conn)
+
+
 DiffClassMapper = {
     DIFF_TYPE_TABLE_COUNT: DBTableBasicInfoDiff,
     DIFF_TYPE_TABLE_NAME: DBTableBasicInfoDiff,
     DIFF_TYPE_ROW_COUNT: DBTableRowCountDiff,
     DIFF_TYPE_TABLE_SCHEMA: DBTableSchemaDiff,
+    DIFF_TYPE_TABLE_SIZE: DBTableSizeDiff,
+    DIFF_TYPE_INDEX_SIZE: DBIndexSizeDiff,
+    DIFF_TYPE_TABLE_TOTAL_SIZE: DBTableTotalSizeDiff,
 }
 
 
-def diff(src_dsn, target_dsn, diff_type):
+def diff(src_dsn, target_dsn, diff_type, verbose=False):
     """Compare all tables row count between two dbs
 
     Args:
         src_dsn: str, dsn for postgres database, like "host=xxx dbname=test user=postgres password=secret port=5432"
         target_dsn: str, dsn for postgres database, like "host=xxx dbname=test user=postgres password=secret port=5432"
         diff_type: str, diff type
+        verbose: boolean, to show verbose diff result or not
 
     Returns:
         diff result
@@ -262,7 +438,7 @@ def diff(src_dsn, target_dsn, diff_type):
     src_db = diff_class(src_dsn)
     target_db = diff_class(target_dsn)
 
-    diff_result = src_db.diff(target_db)
+    diff_result = src_db.diff(target_db, verbose)
 
     print('Diff Result:\n')
 
@@ -286,11 +462,15 @@ def _validate(args):
             DIFF_TYPE_TABLE_COUNT,
             DIFF_TYPE_TABLE_NAME,
             DIFF_TYPE_ROW_COUNT,
-            DIFF_TYPE_TABLE_SCHEMA
+            DIFF_TYPE_TABLE_SCHEMA,
+            DIFF_TYPE_TABLE_SIZE,
+            DIFF_TYPE_INDEX_SIZE,
+            DIFF_TYPE_TABLE_TOTAL_SIZE,
         )),
         'SOURCE_DSN': And(str, len),
         'TARGET_DSN': And(str, len),
         '--version': And(bool),
+        '--verbose': And(bool),
         '--help': And(bool),
     })
 
@@ -311,6 +491,7 @@ def main():
         'src_dsn': args['SOURCE_DSN'],
         'target_dsn': args['TARGET_DSN'],
         'diff_type': args['--type'],
+        'verbose': args['--verbose'],
     }
 
     diff(**kwargs)
