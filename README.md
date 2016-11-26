@@ -1,3 +1,4 @@
+[![Build Status](https://travis-ci.org/hanks/pg_diff.svg?branch=master)](https://travis-ci.org/hanks/pg_diff) [![Coverage Status](https://coveralls.io/repos/github/hanks/pg_diff/badge.svg?branch=master)](https://coveralls.io/github/hanks/pg_diff?branch=master)
 pg diff
 =======
 A simple tool to diff serveral properties of schemas in two postgresql databases.
