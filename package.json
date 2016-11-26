@@ -1,0 +1,20 @@
+{
+  "name": "pg_diff",
+  "version": "1.1.0",
+  "description": "pg diff ======= A simple tool to diff serveral properties of schemas in two postgresql databases.",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hanks/pg_diff.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hanks/pg_diff/issues"
+  },
+  "homepage": "https://github.com/hanks/pg_diff#readme"
+}
