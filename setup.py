@@ -5,7 +5,7 @@ from setuptools import setup, find_packages
 
 VERSION = '0.1.0'
 
-with open('README.md') as f:
+with open('README.rst') as f:
     long_description = f.read()
 
 with open('LICENSE') as f:
@@ -31,7 +31,7 @@ setup(
     author_email='zhouhan315@gmail.com',
     url='https://github.com/hanks/pg_diff',
     license=long_license,
-    packages=find_packages(exclude=['package.json', 'docs', 'tests*']),
+    packages=find_packages(),
     include_package_data=True,
     zip_safe=True,
     install_requires=[
