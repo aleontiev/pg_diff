@@ -1,0 +1,23 @@
+{
+  "name": "pg_diff",
+  "version": "0.2.0",
+  "description": "|Build Status| |Coverage Status|",
+  "main": "index.js",
+  "directories": {
+    "test": "tests"
+  },
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/hanks/pg_diff.git"
+  },
+  "keywords": [],
+  "author": "",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/hanks/pg_diff/issues"
+  },
+  "homepage": "https://github.com/hanks/pg_diff#readme"
+}
