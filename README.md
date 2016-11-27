@@ -27,6 +27,8 @@ You need to install `postgresql` firstly, because `pg_diff` will use `psycopg2` 
 
 # Usage
 
+`pg_diff --type=table_count 'host=source dbname=test user=postgres password=secret port=5432' 'host=target dbname=test user=postgres password=secret port=5432' --verbose`
+
 ```
 Usage:
   pg_diff --type=T_NAME SOURCE_DSN TARGET_DSN [--verbose]
@@ -56,7 +58,13 @@ Mainly using libraries below to make this tool:
 And I use some SQL to query the status of schema, like table size, index size and etc.
 
 # Contribution
-**Waiting for your pull requests**
+1. Fork the repository on GitHub.
+2. Make a branch off of master and commit your changes to it.
+3. Run the tests with `tox`
+  * Either use `tox` to build against all supported Python versions (if you have them installed) or use `tox -e py{version}` to test against a specific version, e.g., `tox -e py27` or `tox -e py33`.
+4. Submit a Pull Request to the master branch on GitHub.
+
+If you'd like to have a development environment for `pg_diff`, you should create a virtualenv and then do `pip install -e .` from within the directory.
 
 # Lisence
 MIT Lisence
