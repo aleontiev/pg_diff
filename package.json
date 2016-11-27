@@ -1,6 +1,6 @@
 {
   "name": "pg_diff",
-  "version": "0.2.0",
+  "version": "0.1.1",
   "description": "|Build Status| |Coverage Status|",
   "main": "index.js",
   "directories": {
@@ -15,7 +15,7 @@
   },
   "keywords": [],
   "author": "",
-  "license": "ISC",
+  "license": "MIT",
   "bugs": {
     "url": "https://github.com/hanks/pg_diff/issues"
   },
