@@ -16,7 +16,7 @@ Arguments:
 
 Options:
   --type=T_NAME  Type name to compare in category, valid input likes: table_name, table_count, table_schema, row_count,
-                 table size. index size, table_total_size
+                 table size, index size, table_total_size, sequence
   -h --help      Show help info.
   --verbose      Show verbose information.
   --version      Show version.
@@ -39,6 +39,7 @@ DIFF_TYPE_TABLE_SCHEMA = 'table_schema'
 DIFF_TYPE_TABLE_SIZE = 'table_size'
 DIFF_TYPE_INDEX_SIZE = 'index_size'
 DIFF_TYPE_TABLE_TOTAL_SIZE = 'table_total_size'
+DIFF_TYPE_SEQUENCE = 'sequence'
 
 
 class DBDiffBase(object):
@@ -139,7 +140,7 @@ $body$
 language plpgsql
     """
 
-    REMOVE_ROW_COUNT_RUNC_SQL = """
+    REMOVE_ROW_COUNT_FUNC_SQL = """
 drop function if exists count_rows(text, text)
     """
 
@@ -167,13 +168,62 @@ order by 2, 3 desc
         except Exception as e:
             exit('Load row count error, please check:\n{}'.format(e))
         finally:
-            cur.execute(self.REMOVE_ROW_COUNT_RUNC_SQL)
+            cur.execute(self.REMOVE_ROW_COUNT_FUNC_SQL)
 
     def load(self):
         """Load database table data based on diff type
         """
         self.conn = self.create_conn()
         self._load_row_count(self.conn)
+
+
+class DBSequenceDiff(DBDiffBase):
+    """Diff class to represent sequence data
+    """
+
+    CREATE_GET_SEQUENCE_LAST_VALUE_FUNC_SQL = """
+create or replace function get_seq_last_value(seq_name text)
+returns integer as
+$$
+declare
+  last_value integer;
+  query varchar;
+begin
+  query := 'SELECT last_value FROM ' || seq_name;
+  execute query into last_value;
+  return last_value;
+end;
+$$
+language plpgsql
+    """
+
+    REMOVE_GET_SEQUENCE_LAST_VALUE_FUNC_SQL = """
+drop function if exists get_seq_last_value(text, text)
+    """
+
+    SEQUENCE_COUNT_SQL = """
+SELECT c.relname, get_seq_last_value(c.relname) FROM pg_class c WHERE c.relkind = 'S' order by c.relname
+    """
+
+    def _load_sequence_count(self, connection):
+        try:
+            cur = connection.cursor()
+            cur.execute(self.CREATE_GET_SEQUENCE_LAST_VALUE_FUNC_SQL)
+            cur.execute(self.SEQUENCE_COUNT_SQL)
+
+            rows = cur.fetchall()
+            for row in rows:
+                self.table_data[row[1]] = row[2]
+        except Exception as e:
+            exit('Load sequence error, please check:\n{}'.format(e))
+        finally:
+            cur.execute(self.REMOVE_GET_SEQUENCE_LAST_VALUE_FUNC_SQL)
+
+    def load(self):
+        """Load database table data based on diff type
+        """
+        self.conn = self.create_conn()
+        self._load_sequence_count(self.conn)
 
 
 class DBTableSchemaDiff(DBDiffBase):
@@ -188,7 +238,7 @@ class DBTableSchemaDiff(DBDiffBase):
 
             rows = cur.fetchall()
             for row in rows:
-                self.table_data[row[1]] = row[0]
+                self.table_data[row[0]] = row[1]
         except Exception as e:
             exit('Load table basic info error, please check:\n{}'.format(e))
 
@@ -419,6 +469,7 @@ DiffClassMapper = {
     DIFF_TYPE_TABLE_SIZE: DBTableSizeDiff,
     DIFF_TYPE_INDEX_SIZE: DBIndexSizeDiff,
     DIFF_TYPE_TABLE_TOTAL_SIZE: DBTableTotalSizeDiff,
+    DIFF_TYPE_SEQUENCE: DBSequenceDiff,
 }
 
 
@@ -467,6 +518,7 @@ def _validate(args):
             DIFF_TYPE_TABLE_SIZE,
             DIFF_TYPE_INDEX_SIZE,
             DIFF_TYPE_TABLE_TOTAL_SIZE,
+            DIFF_TYPE_SEQUENCE,
         )),
         'SOURCE_DSN': And(str, len),
         'TARGET_DSN': And(str, len),
