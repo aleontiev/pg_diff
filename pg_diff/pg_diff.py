@@ -213,7 +213,7 @@ SELECT c.relname, get_seq_last_value(c.relname) FROM pg_class c WHERE c.relkind 
 
             rows = cur.fetchall()
             for row in rows:
-                self.table_data[row[1]] = row[2]
+                self.table_data[row[0]] = row[1]
         except Exception as e:
             exit('Load sequence error, please check:\n{}'.format(e))
         finally:
@@ -238,7 +238,7 @@ class DBTableSchemaDiff(DBDiffBase):
 
             rows = cur.fetchall()
             for row in rows:
-                self.table_data[row[0]] = row[1]
+                self.table_data[row[1]] = row[0]
         except Exception as e:
             exit('Load table basic info error, please check:\n{}'.format(e))
 
