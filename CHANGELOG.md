@@ -2,6 +2,21 @@
 
 All notable changes to this project will be documented in this file. See [standard-version](https://github.com/conventional-changelog/standard-version) for commit guidelines.
 
+<a name="0.2.0"></a>
+# [0.2.0](https://github.com/hanks/pg_diff/compare/v0.2.0..v0.1.1) (2017-01-16)
+
+
+### Bug Fixes
+
+* **diff-sequence:** fix index for diff data ([dae98c3](https://github.com/hanks/pg_diff/commit/dae98c3))
+
+
+### Features
+
+* **diff-sequence:** add sequence diff feature ([563c819](https://github.com/hanks/pg_diff/commit/563c819))
+
+
+
 <a name="0.1.1"></a>
 # [0.1.1](https://github.com/hanks/pg_diff/compare/v0.1.0...v0.1.1) (2016-11-27)
 
