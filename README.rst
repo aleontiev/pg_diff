@@ -15,6 +15,7 @@ Now supported diff options are:
 -  table\_size
 -  index\_size
 -  ``table_total_size``
+-  sequence
 
 Why
 ===
@@ -51,7 +52,7 @@ Usage
       TARGET_DSN     dsn for target database, like "host=xxx dbname=test user=postgres password=secret port=5432"
 
     Options:
-      --type=T_NAME  Type name to compare in category, valid input likes: table_name, table_count, table_schema, row_count, table size. index size, table_total_size
+      --type=T_NAME  Type name to compare in category, valid input likes: table_name, table_count, table_schema, row_count, table size. index size, table_total_size, sequence
       -h --help      Show help info.
       --verbose      Show verbose information.
       --version      Show version.
