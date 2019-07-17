@@ -3,27 +3,33 @@
 
 """PG Diff
 
-Compare between two postgres databases, like all table row count, schema, and etc
+Compare two postgres databases, or retrieve info about one of them.
 
 Usage:
-  pg_diff --type=T_NAME SOURCE_DSN TARGET_DSN [--verbose]
+  pg_diff --type=T_NAME --source=SOURCE [--target=TARGET] [--verbose]
   pg_diff -h | --help
   pg_diff --version
 
-Arguments:
-  SOURCE_DSN     dsn for source database, like "host=xxx dbname=test user=postgres password=secret port=5432"
-  TARGET_DSN     dsn for target database, like "host=xxx dbname=test user=postgres password=secret port=5432"
-
 Options:
-  --type=T_NAME  Type name to compare in category, valid input likes: table_name, table_count, table_schema, row_count,
-                 table size, index size, table_total_size, sequence
-  -h --help      Show help info.
-  --verbose      Show verbose information.
-  --version      Show version.
+  --source=SOURCE      DSN/URL for source DB
+  --target=TARGET      DSN/URL for target DB. Can be omitted to just provide source info
+  --type=T_NAME        Type name to compare in category, valid input likes:
+                        . table_name
+                        . table_count
+                        . table_schema
+                        . row_count,
+                        . table_size
+                        . index_size
+                        . table_total_size
+                        . sequence
+  -h --help            Show help info.
+  --verbose            Show verbose information.
+  --version            Show version.
 """
 
 from pprint import pprint
 from threading import Thread
+from collections import OrderedDict
 import subprocess
 
 from docopt import docopt
@@ -31,6 +37,10 @@ import psycopg2
 from schema import Schema, And, SchemaError
 from deepdiff import DeepDiff
 
+try:
+    from urlparse import urlparse, parse_qsl
+except ImportError
+    from urllib.parse import urlparse, parse_qsl
 
 DIFF_TYPE_TABLE_COUNT = 'table_count'
 DIFF_TYPE_TABLE_NAME = 'table_name'
@@ -40,7 +50,42 @@ DIFF_TYPE_TABLE_SIZE = 'table_size'
 DIFF_TYPE_INDEX_SIZE = 'index_size'
 DIFF_TYPE_TABLE_TOTAL_SIZE = 'table_total_size'
 DIFF_TYPE_SEQUENCE = 'sequence'
+USE_ORDERED_DICT = True
+IGNORE_SCHEMA_SECTIONS = (
+    'bucardo',
+    'pglogical'
+)
+IGNORE_SCHEMAS = (
+    'pg_catalog',
+    'information_schema',
+    'bucardo',
+    'pglogical'
+)
 
+def stringify_list(l):
+    return '({})'.format(
+        ','.join([
+            "'{}'".format(x) for x in l
+        ])
+    )
+
+IGNORE_SCHEMAS_STRING = stringify_list(IGNORE_SCHEMAS)
+
+def get_dsn(url):
+    result = urlparse(url)
+    query = parse_qsl(result.query)
+    sslmode = 'require'
+    for k, v in query:
+        if k == 'sslmode':
+            sslmode = v
+    return "user={} password={} host={} port={} dbname={} sslmode={}".format(
+        result.username,
+        result.password,
+        result.hostname,
+        result.port,
+        result.path,
+        sslmode
+    )
 
 class DBDiffBase(object):
     """Class to represent comparison data for database
@@ -51,9 +96,9 @@ class DBDiffBase(object):
       table_name
     from information_schema.tables
     where
-      table_schema not in ('pg_catalog', 'information_schema', 'bucardo')
+      table_schema not in {}
       and table_type='BASE TABLE'
-    """
+    """.format(IGNORE_SCHEMAS_STRING)
 
     def __init__(self, dsn):
         """Constructor for class Database
@@ -61,9 +106,12 @@ class DBDiffBase(object):
         Args:
             dsn: str, dsn url for pg database
         """
+        if dsn.startswith('postgres://'):
+            dsn = get_dsn(dsn)
+
         self.dsn = dsn
         self.conn = None
-        self.table_data = {}
+        self.table_data = OrderedDict() if USE_ORDERED_DICT else {}
 
     def create_conn(self):
         """Create db connection by dsn
@@ -151,10 +199,10 @@ select
   count_rows(table_schema, table_name)
 from information_schema.tables
 where
-  table_schema not in ('pg_catalog', 'information_schema', 'bucardo')
+  table_schema not in {}
   and table_type='BASE TABLE'
-order by 2, 3 desc
-    """
+order by 3, 2 desc
+    """.format(IGNORE_SCHEMAS_STRING)
 
     def _load_row_count(self, connection):
         try:
@@ -254,7 +302,7 @@ class DBTableSchemaDiff(DBDiffBase):
                 command = self.TABLE_SCHEMA_PSQL_COMMAND.format(**kwargs)
 
                 schema = subprocess.check_output(command, shell=True)
-                self.table_data[table] = self._format_raw_schema(schema, ['bucardo'])
+                self.table_data[table] = self._format_raw_schema(schema, IGNORE_SCHEMA_SECTIONS)
         except Exception as e:
             exit('Load table schema error, please check:\n{}'.format(e))
 
@@ -370,10 +418,10 @@ class DBTableSizeDiff(DBDiffBase):
       pg_size_pretty(pg_table_size(table_name))
     from information_schema.tables
     where
-      table_schema not in ('pg_catalog', 'information_schema', 'bucardo')
+      table_schema not in {}
       and table_type='BASE TABLE'
-    order by 2, 3 desc
-    """
+    order by 3, 2 desc
+    """.format(IGNORE_SCHEMAS_STRING)
 
     def _load_tabale_size_info(self, connection):
         try:
@@ -404,10 +452,10 @@ class DBIndexSizeDiff(DBDiffBase):
       pg_size_pretty(pg_indexes_size(table_name))
     from information_schema.tables
     where
-      table_schema not in ('pg_catalog', 'information_schema', 'bucardo')
+      table_schema not in {}
       and table_type='BASE TABLE'
     order by 2, 3 desc
-    """
+    """.format(IGNORE_SCHEMAS_STRING)
 
     def _load_index_size_info(self, connection):
         try:
@@ -438,10 +486,10 @@ class DBTableTotalSizeDiff(DBDiffBase):
       pg_size_pretty(pg_total_relation_size(table_name))
     from information_schema.tables
     where
-      table_schema not in ('pg_catalog', 'information_schema', 'bucardo')
+      table_schema not in {}
       and table_type='BASE TABLE'
     order by 2, 3 desc
-    """
+    """.format(IGNORE_SCHEMAS_STRING)
 
     def _load_table_total_size_info(self, connection):
         try:
@@ -473,12 +521,12 @@ DiffClassMapper = {
 }
 
 
-def diff(src_dsn, target_dsn, diff_type, verbose=False):
+def diff_or_info(source, target=None, diff_type, verbose=False):
     """Compare all tables row count between two dbs
 
     Args:
-        src_dsn: str, dsn for postgres database, like "host=xxx dbname=test user=postgres password=secret port=5432"
-        target_dsn: str, dsn for postgres database, like "host=xxx dbname=test user=postgres password=secret port=5432"
+        source: str, DSN/URL for postgres database
+        target: str, DSN/URL for postgres database
         diff_type: str, diff type
         verbose: boolean, to show verbose diff result or not
 
@@ -487,17 +535,22 @@ def diff(src_dsn, target_dsn, diff_type, verbose=False):
     """
     diff_class = DiffClassMapper[diff_type]
 
-    src_db = diff_class(src_dsn)
-    target_db = diff_class(target_dsn)
+    src_db = diff_class(source)
+    if target:
+        target_db = diff_class(target)
 
-    diff_result = src_db.diff(target_db, verbose)
+        diff_result = src_db.diff(target_db, verbose)
 
-    print('Diff Result:\n')
+        print('Diff Result:\n')
 
-    if diff_result:
-        pprint(diff_result, indent=2)
+        if diff_result:
+            pprint(diff_result, indent=2)
+        else:
+            print('They are the same.')
     else:
-        print('They are the same.')
+        # do not diff, display info
+        src_db.load()
+        pprint('Info: \n' src_db.table_data
 
 
 def _validate(args):
@@ -520,8 +573,8 @@ def _validate(args):
             DIFF_TYPE_TABLE_TOTAL_SIZE,
             DIFF_TYPE_SEQUENCE,
         )),
-        'SOURCE_DSN': And(str, len),
-        'TARGET_DSN': And(str, len),
+        '--source': And(str, len),
+        '--target': And(str),
         '--version': And(bool),
         '--verbose': And(bool),
         '--help': And(bool),
@@ -536,18 +589,17 @@ def _validate(args):
 
 
 def main():
-    args = docopt(__doc__, version='PG Diff 0.1')
+    args = docopt(__doc__, version='PG Diff 0.2')
 
     args = _validate(args)
 
     kwargs = {
-        'src_dsn': args['SOURCE_DSN'],
-        'target_dsn': args['TARGET_DSN'],
+        'source': args['--source'],
+        'target': args['--target'],
         'diff_type': args['--type'],
         'verbose': args['--verbose'],
     }
-
-    diff(**kwargs)
+    diff_or_info(**kwargs)
 
 
 if __name__ == '__main__':
