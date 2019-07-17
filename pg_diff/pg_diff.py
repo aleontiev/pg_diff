@@ -616,7 +616,7 @@ def _validate(args):
 
 
 def main():
-    args = docopt(__doc__, version='PG Diff 0.2')
+    args = docopt(__doc__, version='PG Diff 0.2.2')
 
     args = _validate(args)
 
