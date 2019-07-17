@@ -524,6 +524,10 @@ DiffClassMapper = {
 }
 
 
+def count_format(num):
+    return '{:,}'.format(num)
+
+
 def diff_or_info(source, target, diff_type, verbose=False):
     """Compare all tables row count between two dbs
 
@@ -554,7 +558,6 @@ def diff_or_info(source, target, diff_type, verbose=False):
         src_db.load()
 
         # do not diff, display info instead
-        print('Info Result:\n')
         table_data = src_db.table_data
         total = sum(table_data.values())
         if 'size' in diff_type:
@@ -563,9 +566,18 @@ def diff_or_info(source, target, diff_type, verbose=False):
             table_data = table_data.copy()
             for k, v in table_data.items():
                 table_data[k] = size(v)
+        elif 'count' in diff_type:
+            total = count_format(total)
+            table_data = table_data.copy()
+            for k, v in table_data.items():
+                table_data[k] = count_format(v)
 
-        pprint(list(reversed(table_data.items())))
-        pprint('Total: {}'.format(total))
+        if verbose:
+            print('Info Result:\n')
+            pprint(list(reversed(table_data.items())))
+        print(
+            'Total {}: {}'.format(diff_type.replace('_', ' ', total))
+        )
 
 
 def _validate(args):
