@@ -576,7 +576,7 @@ def diff_or_info(source, target, diff_type, verbose=False):
             print('Info Result:\n')
             pprint(list(reversed(table_data.items())))
         print(
-            'Total {}: {}'.format(diff_type.replace('_', ' ', total))
+            'Total {}: {}'.format(diff_type.replace('_', ' '), total)
         )
 
 
@@ -616,7 +616,7 @@ def _validate(args):
 
 
 def main():
-    args = docopt(__doc__, version='PG Diff 0.2.2')
+    args = docopt(__doc__, version='PG Diff 0.2.3')
 
     args = _validate(args)
 
