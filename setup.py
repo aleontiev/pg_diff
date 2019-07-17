@@ -39,6 +39,7 @@ setup(
         'schema>=0.6.5',
         'deepdiff>=2.5.1',
         'psycopg2>=2.6.2',
+        'hurry.filesize>=0.9'
     ],
     entry_points={
         'console_scripts': [
