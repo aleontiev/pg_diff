@@ -33,9 +33,10 @@ from threading import Thread
 from collections import OrderedDict
 import subprocess
 
+from hurry.filesize import size
 from docopt import docopt
 import psycopg2
-from schema import Schema, And, SchemaError
+from schema import Schema, And, Or, SchemaError
 from deepdiff import DeepDiff
 
 try:
@@ -84,7 +85,7 @@ def get_dsn(url):
         result.password,
         result.hostname,
         result.port,
-        result.path,
+        result.path.replace('/', ''),
         sslmode
     )
 
@@ -122,7 +123,9 @@ class DBDiffBase(object):
         """
         try:
             conn = psycopg2.connect(self.dsn)
-        except:
+        except Exception as e:
+            print(self.dsn)
+            print(str(e))
             exit('Unable to connect to the database')
 
         return conn
@@ -416,7 +419,7 @@ class DBTableSizeDiff(DBDiffBase):
     select
       table_schema,
       table_name,
-      pg_size_pretty(pg_table_size(table_name))
+      pg_table_size(table_name)
     from information_schema.tables
     where
       table_schema not in {}
@@ -450,12 +453,12 @@ class DBIndexSizeDiff(DBDiffBase):
     select
       table_schema,
       table_name,
-      pg_size_pretty(pg_indexes_size(table_name))
+      pg_indexes_size(table_name)
     from information_schema.tables
     where
       table_schema not in {}
       and table_type='BASE TABLE'
-    order by 2, 3 desc
+    order by 3, 2 desc
     """.format(IGNORE_SCHEMAS_STRING)
 
     def _load_index_size_info(self, connection):
@@ -479,23 +482,22 @@ class DBIndexSizeDiff(DBDiffBase):
 class DBTableTotalSizeDiff(DBDiffBase):
     """Diff class to represent table total size comparison data
     """
-
     TABLE_TOTAL_SIZE_COUNT_SQL = """
     select
       table_schema,
       table_name,
-      pg_size_pretty(pg_total_relation_size(table_name))
+      pg_total_relation_size(table_name)
     from information_schema.tables
     where
       table_schema not in {}
       and table_type='BASE TABLE'
-    order by 2, 3 desc
+    order by 3, 2 desc
     """.format(IGNORE_SCHEMAS_STRING)
 
     def _load_table_total_size_info(self, connection):
         try:
             cur = connection.cursor()
-            cur.execute(self.INDEX_SIZE_COUNT_SQL)
+            cur.execute(self.TABLE_TOTAL_SIZE_COUNT_SQL)
 
             rows = cur.fetchall()
             for row in rows:
@@ -553,8 +555,17 @@ def diff_or_info(source, target, diff_type, verbose=False):
 
         # do not diff, display info instead
         print('Info Result:\n')
+        table_data = src_db.table_data
+        total = sum(table_data.values())
+        if 'size' in diff_type:
+            # convert to size units
+            total = size(total)
+            table_data = table_data.copy()
+            for k, v in table_data.items():
+                table_data[k] = size(v)
 
-        pprint(src_db.table_data)
+        pprint(list(reversed(table_data.items())))
+        pprint('Total: {}'.format(total))
 
 
 def _validate(args):
@@ -578,7 +589,7 @@ def _validate(args):
             DIFF_TYPE_SEQUENCE,
         )),
         '--source': And(str, len),
-        '--target': And(str),
+        '--target': Or(str, None),
         '--version': And(bool),
         '--verbose': And(bool),
         '--help': And(bool),
