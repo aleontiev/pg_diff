@@ -27,6 +27,7 @@ Options:
   --version            Show version.
 """
 
+from __future__ import print_function
 from pprint import pprint
 from threading import Thread
 from collections import OrderedDict
@@ -39,7 +40,7 @@ from deepdiff import DeepDiff
 
 try:
     from urlparse import urlparse, parse_qsl
-except ImportError
+except ImportError:
     from urllib.parse import urlparse, parse_qsl
 
 DIFF_TYPE_TABLE_COUNT = 'table_count'
@@ -521,7 +522,7 @@ DiffClassMapper = {
 }
 
 
-def diff_or_info(source, target=None, diff_type, verbose=False):
+def diff_or_info(source, target, diff_type, verbose=False):
     """Compare all tables row count between two dbs
 
     Args:
@@ -548,9 +549,12 @@ def diff_or_info(source, target=None, diff_type, verbose=False):
         else:
             print('They are the same.')
     else:
-        # do not diff, display info
         src_db.load()
-        pprint('Info: \n' src_db.table_data
+
+        # do not diff, display info instead
+        print('Info Result:\n')
+
+        pprint(src_db.table_data)
 
 
 def _validate(args):
